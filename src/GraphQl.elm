@@ -2,6 +2,7 @@ module GraphQl
     exposing
         ( Query
         , Field
+        , Request
         , query
         , field
         , withIntArg
@@ -27,6 +28,23 @@ type Field
         }
 
 
+type Request a
+    = Request
+        { endpoint : String
+        , query : Query
+        , decoder : Decoder a
+        }
+
+
+request : String -> Query -> Decoder a -> Request a
+request endpoint query decoder =
+    Request
+        { endpoint = endpoint
+        , query = query
+        , decoder = decoder
+        }
+
+
 query : List Field -> Query
 query =
     Query
@@ -39,16 +57,6 @@ field id =
         , arguments = []
         , selectors = []
         }
-
-
-setSelectors : List Field -> Field -> Field
-setSelectors selectors (Field field) =
-    Field { field | selectors = selectors }
-
-
-setArguments : List ( String, String ) -> Field -> Field
-setArguments arguments (Field field) =
-    Field { field | arguments = arguments }
 
 
 withIntArg : ( String, Int ) -> Field -> Field
@@ -68,6 +76,24 @@ withStringArg arg field =
 withSelectors : List Field -> Field -> Field
 withSelectors selectors field =
     setSelectors selectors field
+
+
+send : (Result Http.Error a -> msg) -> Request a -> Cmd msg
+send msg (Request request) =
+    Http.send msg <|
+        Http.post request.endpoint
+            (body request.query)
+            (decodeGraphQlQueries request.decoder)
+
+
+setSelectors : List Field -> Field -> Field
+setSelectors selectors (Field field) =
+    Field { field | selectors = selectors }
+
+
+setArguments : List ( String, String ) -> Field -> Field
+setArguments arguments (Field field) =
+    Field { field | arguments = arguments }
 
 
 addInFieldArgs : Field -> ( String, String ) -> Field
@@ -162,8 +188,3 @@ toGraphQlArg ( param, value ) =
 decodeGraphQlQueries : Decode.Decoder a -> Decode.Decoder a
 decodeGraphQlQueries =
     Decode.field "data"
-
-
-send : (Result Http.Error a -> msg) -> String -> Query -> Decoder a -> Cmd msg
-send msg url query decoder =
-    Http.send msg (Http.post url (body query) (decodeGraphQlQueries decoder))
