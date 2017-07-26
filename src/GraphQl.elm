@@ -11,15 +11,46 @@ module GraphQl
         , send
         )
 
+{-| GraphQL made easy in Elm!
+
+
+# Types
+
+@docs Query
+@docs Field
+@docs Request
+
+
+# Constructors
+
+@docs query
+@docs field
+
+
+# Fields modifiers
+
+@docs withIntArg
+@docs withStringArg
+@docs withSelectors
+
+
+# Send Commands
+
+@docs send
+
+-}
+
 import Http
 import Json.Encode as Encode
 import Json.Decode as Decode exposing (Decoder)
 
 
+{-| -}
 type Query
     = Query (List Field)
 
 
+{-| -}
 type Field
     = Field
         { id : String
@@ -28,6 +59,7 @@ type Field
         }
 
 
+{-| -}
 type Request a
     = Request
         { endpoint : String
@@ -45,11 +77,13 @@ request endpoint query decoder =
         }
 
 
+{-| -}
 query : List Field -> Query
 query =
     Query
 
 
+{-| -}
 field : String -> Field
 field id =
     Field
@@ -59,6 +93,7 @@ field id =
         }
 
 
+{-| -}
 withIntArg : ( String, Int ) -> Field -> Field
 withIntArg arg field =
     arg
@@ -66,6 +101,7 @@ withIntArg arg field =
         |> addInFieldArgs field
 
 
+{-| -}
 withStringArg : ( String, String ) -> Field -> Field
 withStringArg arg field =
     arg
@@ -73,11 +109,13 @@ withStringArg arg field =
         |> addInFieldArgs field
 
 
+{-| -}
 withSelectors : List Field -> Field -> Field
 withSelectors selectors field =
     setSelectors selectors field
 
 
+{-| -}
 send : (Result Http.Error a -> msg) -> Request a -> Cmd msg
 send msg (Request request) =
     Http.send msg <|
