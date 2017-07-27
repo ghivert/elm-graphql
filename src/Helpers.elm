@@ -23,3 +23,7 @@ surroundBrackets string =
 surroundParen : String -> String
 surroundParen string =
   "(" ++ string ++ ")"
+
+surroundNewline : String -> String
+surroundNewline =
+  surround "\n"
