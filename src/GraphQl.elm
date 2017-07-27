@@ -1,11 +1,10 @@
 module GraphQl
   exposing
-    ( Value, Variables, Request
-    , query
+    ( Value, Request, Argument
+    , query, addVariables
     , object, named, field
-    , withArgument, withSelectors, withVariables, withName, withVariable
+    , withArgument, withVariable, withSelectors, withAlias
     , variable, type_, int, string
-    , encodeQueryAsString
     , send
     )
 
@@ -21,13 +20,13 @@ module GraphQl
 @docs named
 @docs field
 
-# Fields modifiers
+# Values modifiers
 @docs withIntArg
 @docs withStringArg
 @docs withTypeArg
 @docs withVarArg
 @docs withSelectors
-@docs withVariables
+@docs addVariables
 
 # Send Commands
 @docs send
@@ -36,87 +35,85 @@ module GraphQl
 import Http
 import Json.Encode as Encode
 import Json.Decode as Decode exposing (Decoder)
-import GraphQl.Field as Field
+import GraphQl.Value as Value
 import Helpers
 
-{-
-  ████████ ██    ██ ██████  ███████ ███████
-     ██     ██  ██  ██   ██ ██      ██
-     ██      ████   ██████  █████   ███████
-     ██       ██    ██      ██           ██
-     ██       ██    ██      ███████ ███████
--}
 
-
-type Variables = Variables
-type Argument  = Argument String
 
 type Request a
-  = Query String Value (Decoder a) (Maybe Variables)
+  = Query String Value (Decoder a) (Maybe (List (String, Encode.Value)))
 
 {-| -}
 query : String -> Value -> Decoder a -> Request a
-query endpoint body decoder =
-  Query endpoint body decoder Nothing
+query endpoint query_ decoder =
+  Query endpoint query_ decoder Nothing
+
+{-| -}
+addVariables : List (String, Encode.Value) -> Request a -> Request a
+addVariables variables request =
+  case request of
+    Query endpoint query_ decoder _ ->
+      Query endpoint query_ decoder (Just variables)
+
+
+
+{-| -}
+type Value =
+  Value Value.Value
+
+extractValue : Value -> Value.Value
+extractValue (Value field) =
+  field
+
+type Argument =
+  Argument String
 
 {-| -}
 object : List Value -> Value
-object fields =
-  fields
-    |> List.map extractField
-    |> Field.addSelectorsIn Field.new
+object selectors =
+  selectors
+    |> List.map extractValue
+    |> Value.addSelectorsIn Value.new
     |> Value
 
 {-| -}
 named : String -> List Value -> Value
-named id fields =
-  let (Value new) = object fields in
-    new
-      |> Field.setId id
-      |> Value
-
-{-| -}
-withVariables : List (String, String) -> Request a -> Request a
-withVariables variables request =
-  case request of
-    Query endpoint body decoder _ ->
-      Query endpoint body decoder (Just Variables)
-
-{-| -}
-type Value =
-  Value Field.Field
-
-extractField : Value -> Field.Field
-extractField (Value field) =
-  field
-
-
-{-
-  ███████ ██ ███████ ██      ██████
-  ██      ██ ██      ██      ██   ██
-  █████   ██ █████   ██      ██   ██
-  ██      ██ ██      ██      ██   ██
-  ██      ██ ███████ ███████ ██████
--}
-
+named id selectors =
+  field id
+    |> withSelectors selectors
 
 {-| -}
 field : String -> Value
 field id =
-  Field.new
-    |> Field.setId id
-    |> Value
-
-withArgument : String -> Argument -> Value -> Value
-withArgument name (Argument value) (Value field) =
-  (name, value)
-    |> Field.addInFieldArgs field
+  Value.new
+    |> Value.setId id
     |> Value
 
 withVariable : String -> String -> Value -> Value
-withVariable name value (Value field) =
-  ("$" ++ name, value)
-    |> Field.addInFieldVars field
+withVariable name content (Value value) =
+  ("$" ++ name, content)
+    |> Value.addInValueVariables value
+    |> Value
+
+{-| -}
+withSelectors : List Value -> Value -> Value
+withSelectors selectors (Value value) =
+  selectors
+    |> List.map extractValue
+    |> Value.addSelectorsIn value
+    |> Value
+
+{-| -}
+withAlias : String -> Value -> Value
+withAlias alias (Value value) =
+  value
+    |> Value.setAlias alias
+    |> Value
+
+withArgument : String -> Argument -> Value -> Value
+withArgument name (Argument content) (Value value) =
+  (name, content)
+    |> Value.addInValueArguments value
     |> Value
 
 variable : String -> Argument
@@ -135,66 +132,36 @@ type_ : String -> Argument
 type_ =
   Argument
 
-{-| -}
-withSelectors : List Value -> Value -> Value
-withSelectors fields (Value field) =
-  fields
-    |> List.map extractField
-    |> Field.addSelectorsIn field
-    |> Value
-
-{-| -}
-withName : String -> Value -> Value
-withName name (Value field) =
-  field
-    |> Field.setName name
-    |> Value
-
-
-{-
-  ███████ ███████ ███    ██ ██████
-  ██      ██      ████   ██ ██   ██
-  ███████ █████   ██ ██  ██ ██   ██
-       ██ ██      ██  ██ ██ ██   ██
-  ███████ ███████ ██   ████ ██████
--}
 
 
 {-| -}
 send : (Result Http.Error a -> msg) -> Request a -> Cmd msg
 send msg =
-  Http.send msg << toPostRequest
+  Http.send msg << toHttpRequest
 
-toPostRequest : Request a -> Http.Request a
-toPostRequest request =
+toHttpRequest : Request a -> Http.Request a
+toHttpRequest request =
   case request of
-    Query endpoint body decoder variables ->
+    Query endpoint query_ decoder variables ->
       Http.post endpoint
-        (queryBody body variables)
-        (decodeGraphQlQueries decoder)
+        (queryToBody query_ variables)
+        (Decode.field "data" decoder)
 
-queryBody : Value -> Maybe Variables -> Http.Body
-queryBody body variables =
+queryToBody : Value -> Maybe (List (String, Encode.Value)) -> Http.Body
+queryToBody value variables =
   Http.jsonBody <|
-    Encode.object
-      [ ("query", encodeQuery body)
-      -- , ("variables", encodeVariables body.variables)
-      ]
+    Encode.object <|
+      List.concat
+        [ [ ("query", Encode.string <| encodeQuery value) ]
+        , variables
+          |> Maybe.map Encode.object
+          |> Maybe.map ((,) "variables")
+          |> Maybe.map List.singleton
+          |> Maybe.withDefault []
+        ]
 
-encodeQuery : Value -> Encode.Value
-encodeQuery =
-  Encode.string << encodeQueryAsString
-
-encodeQueryAsString : Value -> String
-encodeQueryAsString (Value fields) =
-  fields
-    |> Field.encodeField
-    |> (++) ("query " )
-
--- encodeVariables : List (String, String) -> Encode.Value
--- encodeVariables variables =
---   Encode.object (List.map encodeVariable)
-
-decodeGraphQlQueries : Decode.Decoder a -> Decode.Decoder a
-decodeGraphQlQueries =
-  Decode.field "data"
+encodeQuery : Value -> String
+encodeQuery (Value value) =
+  value
+    |> Value.encodeValue
+    |> (++) "query "
