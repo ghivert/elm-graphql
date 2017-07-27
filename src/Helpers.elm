@@ -4,26 +4,26 @@ reverseAdd : String -> String -> String
 reverseAdd =
   flip (++)
 
-surround : String -> String -> String
-surround char string =
+between : String -> String -> String
+between char string =
   char ++ string ++ char
 
-surroundQuotes : String -> String
-surroundQuotes =
-  surround "\""
+betweenQuotes : String -> String
+betweenQuotes =
+  between "\""
 
-surroundBraces : String -> String
-surroundBraces string =
+betweenBraces : String -> String
+betweenBraces string =
   "{" ++ string ++ "}"
 
-surroundBrackets : String -> String
-surroundBrackets string =
+betweenBrackets : String -> String
+betweenBrackets string =
   "[" ++ string ++ "]"
 
-surroundParen : String -> String
-surroundParen string =
+betweenParen : String -> String
+betweenParen string =
   "(" ++ string ++ ")"
 
-surroundNewline : String -> String
-surroundNewline =
-  surround "\n"
+betweenNewline : String -> String
+betweenNewline =
+  between "\n"

@@ -6,6 +6,7 @@ If you're searching a complete solution including Decoders defined with your que
 ## Opinion
 Just import GraphQL, and write queries! This package suppose your decoders are already written, and do not write decoders. It only provide a nice syntax to do GraphQL queries, and decode the `"data"` at the root of standard GraphQL for you. Just think on your schema, and don't bother with everything else. By not writing custom decoders, you can make multiple queries on the same data, with different schemas each times. They will always be converted to the same type, avoiding you to rewrote a type for each request like others can do. Moreover, it is purely written in Elm, avoiding you to think to recompile .graphql files.
 
+This package try to be similar to Json.Encode and Http. This allow to write things more easily if you're often involved with Elm!
 ## How to use?
 ```elm
 module Types exposing (..)
@@ -59,7 +60,7 @@ decodeAddress =
 ```elm
 module Requests exposing (..)
 
-import GraphQl exposing (Query, query, field, withIntArg, withSelectors)
+import GraphQl
 import Json.Decode as Decode exposing (Decoder, field)
 import Types exposing (User, Address, Msg)
 
@@ -76,37 +77,42 @@ decodeNameAndAddress =
     (field "address" decodeAddress)
 
 
-userRequest : Int -> Query
-userRequest id =
-  root
-    [ field "user"
-      |> withIntArg ( "id", id )
-      |> withSelectors
-        [ field "id"
-        , field "name"
-          |> withSelectors
-            [ field "first_name"
-            , field "last_name"
+userRequest : GraphQl.Value
+userRequest =
+  GraphQl.object
+    [ GraphQl.field "user"
+      |> GraphQl.withArgument "id" (GraphQl.variable "id")
+      |> GraphQl.withAlias "current_user"
+      |> GraphQl.withSelectors
+        [ GraphQl.field "id"
+        , GraphQl.field "name"
+          |> GraphQl.withSelectors
+            [ GraphQl.field "first_name"
+            , GraphQl.field "last_name"
             ]
         ]
-    , field "address"
-      |> withIntArg ( "user_id", id )
-      |> withSelectors
-        [ field "street"
-        , field "town"
+    , GraphQl.field "address"
+      |> GraphQl.withArgument "city" (GraphQl.string "Paris")
+      |> GraphQl.withArgument "id" (GraphQl.int 12)
+      |> GraphQl.withArgument "type" (GraphQl.type_ "LOFT")
+      |> GraphQl.withSelectors
+        [ GraphQl.field "street"
+        , GraphQl.field "town"
         ]
     ]
+    |> GraphQl.withVariable "id" "INT!"
 
 
-baseRequest : Query -> Decoder a -> Request a
+baseRequest : GraphQl.Value -> Decoder a -> GraphQl.Request a
 baseRequest =
   GraphQl.query "/example_endpoint"
 
 
-sendRequest : Cmd Msg
-sendRequest =
-  GraphQl.send GraphQl <|
-    baseRequest (userRequest 15) decodeNameAndAddress
+sendRequest : Int -> Cmd Msg
+sendRequest id =
+  baseRequest userRequest decodeNameAndAddress
+    |> GraphQl.addVariables [ ("id", Encode.int id) ]
+    |> GraphQl.send GraphQl
 ```
 
 Licenced BSD3, enjoy the work! GraphQL is amazingly awesome!

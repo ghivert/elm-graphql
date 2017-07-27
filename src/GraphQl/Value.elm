@@ -8,8 +8,6 @@ module GraphQl.Value
     , encodeValue
     )
 
-{-| -}
-
 import Helpers
 
 
@@ -81,14 +79,14 @@ encodeValue value =
 encodeValueHelp : Value -> String
 encodeValueHelp (Value value) =
   value.id
-    |> Maybe.map (encodeName value.alias value.arguments)
+    |> Maybe.map (encodeName (Value value))
     |> Maybe.withDefault ""
     |> Helpers.reverseAdd (addSelectors value.selectors)
 
-encodeName : Maybe String -> List (String, String) -> String -> String
-encodeName name arguments id =
-  addName name ++ id
-    |> Helpers.reverseAdd (addArguments arguments)
+encodeName : Value -> String -> String
+encodeName (Value value) id =
+  addName value.alias ++ id
+    |> Helpers.reverseAdd (addArguments value.arguments)
 
 addName : Maybe String -> String
 addName =
@@ -102,8 +100,8 @@ addSelectors selectors =
     selectors
       |> List.map encodeValueHelp
       |> String.join "\n"
-      |> Helpers.surroundNewline
-      |> Helpers.surroundBraces
+      |> Helpers.betweenNewline
+      |> Helpers.betweenBraces
 
 addArguments : List (String, String) -> String
 addArguments arguments =
@@ -111,10 +109,10 @@ addArguments arguments =
     ""
   else
     arguments
-      |> List.map toGraphQlArg
+      |> List.map joinGraphQlArgument
       |> String.join ", "
-      |> Helpers.surroundParen
+      |> Helpers.betweenParen
 
-toGraphQlArg : (String, String) -> String
-toGraphQlArg (param, value) =
+joinGraphQlArgument : (String, String) -> String
+joinGraphQlArgument (param, value) =
   param ++ ": " ++ value
