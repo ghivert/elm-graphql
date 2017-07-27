@@ -7,7 +7,11 @@ If you're searching a complete solution including Decoders defined with your que
 Just import GraphQL, and write queries! This package suppose your decoders are already written, and do not write decoders. It only provide a nice syntax to do GraphQL queries, and decode the `"data"` at the root of standard GraphQL for you. Just think on your schema, and don't bother with everything else. By not writing custom decoders, you can make multiple queries on the same data, with different schemas each times. They will always be converted to the same type, avoiding you to rewrote a type for each request like others can do. Moreover, it is purely written in Elm, avoiding you to think to recompile .graphql files.
 
 This package try to be similar to Json.Encode and Http. This allow to write things more easily if you're often involved with Elm!
+
 ## How to use?
+Basically, creates an object with `object`, add some fields with a list of `field`, and you're done! You can add some arguments, selectors or alias to the fields, by using the corresponding functions. Otherwise, a (huge) example:
+
+`Types.elm`
 ```elm
 module Types exposing (..)
 
@@ -16,7 +20,7 @@ import Json.Decode as Decode exposing (Decoder, field, maybe, int, string)
 
 
 type Msg
-  = GraphQl (Result Error a)
+  = GraphQlMsg (Result Error NameAndAddress)
 
 
 type alias User =
@@ -36,6 +40,10 @@ type alias Address =
   , town : Maybe String
   }
 
+type alias NameAndAddress =
+  { user : User
+  , address : Address
+  }
 
 decodeName : Decoder Name
 decodeName =
@@ -56,25 +64,22 @@ decodeAddress =
   Decode.map2 Address
     (maybe (field "street" string))
     (maybe (field "town" string))
-```
-```elm
-module Requests exposing (..)
-
-import GraphQl
-import Json.Decode as Decode exposing (Decoder, field)
-import Types exposing (User, Address, Msg)
-
-
-type alias NameAndAddress =
-  { user : User
-  , address : Address
-  }
 
 
 decodeNameAndAddress =
   Decode.map2 NameAndAddress
     (field "user" decodeUser)
     (field "address" decodeAddress)
+```
+
+
+`Requests.elm`
+```elm
+module Requests exposing (..)
+
+import GraphQl
+import Json.Decode as Decode exposing (Decoder, field)
+import Types exposing (User, Address, Msg(..))
 
 
 userRequest : GraphQl.Value
@@ -112,7 +117,7 @@ sendRequest : Int -> Cmd Msg
 sendRequest id =
   baseRequest userRequest decodeNameAndAddress
     |> GraphQl.addVariables [ ("id", Encode.int id) ]
-    |> GraphQl.send GraphQl
+    |> GraphQl.send GraphQlMsg
 ```
 
 Licenced BSD3, enjoy the work! GraphQL is amazingly awesome!
