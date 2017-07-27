@@ -1,26 +1,29 @@
 module GraphQl
   exposing
-    ( Query, Field, Request
+    ( Field, Request, Body
     , query
-    , field
-    , withIntArg, withStringArg, withSelectors
+    , root, named, field
+    , withIntArg, withStringArg, withSelectors, withTypeArg
     , send
     )
 
 {-| GraphQL made easy in Elm!
 
 # Types
-@docs Query
+@docs Body
 @docs Field
 @docs Request
 
 # Constructors
 @docs query
+@docs root
+@docs named
 @docs field
 
 # Fields modifiers
 @docs withIntArg
 @docs withStringArg
+@docs withTypeArg
 @docs withSelectors
 
 # Send Commands
@@ -30,158 +33,113 @@ module GraphQl
 import Http
 import Json.Encode as Encode
 import Json.Decode as Decode exposing (Decoder)
-
-{-| -}
-type Query
-  = Query (List Field)
-
-{-| -}
-type Field
-  = Field
-    { id : String
-    , arguments : List ( String, String )
-    , selectors : List Field
-    }
+import GraphQl.Field as Field
+import Helpers
 
 {-| -}
 type Request a
-  = Request
-    { endpoint : String
-    , query : Query
-    , decoder : Decoder a
-    }
+  = Query String Body (Decoder a)
 
-request : String -> Query -> Decoder a -> Request a
-request endpoint query decoder =
-  Request
-    { endpoint = endpoint
-    , query = query
-    , decoder = decoder
+{-| -}
+type Body =
+  Body
+    { fields : List Field
+    , variables : List (String, String)
+    , name : Maybe String
     }
 
 {-| -}
-query : List Field -> Query
+type alias Field =
+  Field.Field
+
+{-| -}
+query : String -> Body -> Decoder a -> Request a
 query =
   Query
 
 {-| -}
-field : String -> Field
-field id =
-  Field
-    { id = id
-    , arguments = []
-    , selectors = []
+root : List Field -> Body
+root fields =
+  Body
+    { fields = fields
+    , variables = []
+    , name = Nothing
     }
 
 {-| -}
-withIntArg : ( String, Int ) -> Field -> Field
-withIntArg arg field =
-  arg
-    |> Tuple.mapSecond toString
-    |> addInFieldArgs field
+named : String -> List Field -> Body
+named name fields =
+  Body
+    { fields = fields
+    , variables = []
+    , name = Just name
+    }
 
 {-| -}
-withStringArg : ( String, String ) -> Field -> Field
-withStringArg arg field =
-  arg
-    |> Tuple.mapSecond surroundQuotes
-    |> addInFieldArgs field
+field : String -> Field
+field =
+  Field.new
+
+{-| -}
+withIntArg : (String, Int) -> Field -> Field
+withIntArg argument field =
+  argument
+    |> Tuple.mapSecond toString
+    |> Field.addInFieldArgs field
+
+{-| -}
+withStringArg : (String, String) -> Field -> Field
+withStringArg argument field =
+  argument
+    |> Tuple.mapSecond Helpers.surroundQuotes
+    |> Field.addInFieldArgs field
+
+{-| -}
+withTypeArg : (String, String) -> Field -> Field
+withTypeArg =
+  flip Field.addInFieldArgs
 
 {-| -}
 withSelectors : List Field -> Field -> Field
-withSelectors selectors field =
-  setSelectors selectors field
+withSelectors =
+ Field.setSelectors
+
+{-| -}
+withName : String -> Field -> Field
+withName =
+  Field.setName
 
 {-| -}
 send : (Result Http.Error a -> msg) -> Request a -> Cmd msg
-send msg (Request request) =
+send msg request =
   Http.send msg <|
-    Http.post request.endpoint
-      (body request.query)
-      (decodeGraphQlQueries request.decoder)
+    toPostRequest request
 
-setSelectors : List Field -> Field -> Field
-setSelectors selectors (Field field) =
-  Field { field | selectors = selectors }
+toPostRequest : Request a -> Http.Request a
+toPostRequest request =
+  case request of
+    Query endpoint body decoder ->
+      Http.post endpoint
+        (queryBody body)
+        (decodeGraphQlQueries decoder)
 
-setArguments : List ( String, String ) -> Field -> Field
-setArguments arguments (Field field) =
-  Field { field | arguments = arguments }
-
-addInFieldArgs : Field -> ( String, String ) -> Field
-addInFieldArgs (Field field) arg =
-  setArguments (arg :: field.arguments) (Field field)
-
-surround : String -> String -> String
-surround char string =
-  char ++ string ++ char
-
-surroundQuotes : String -> String
-surroundQuotes =
-  surround "\""
-
-surroundBraces : String -> String
-surroundBraces string =
-  "{" ++ string ++ "}"
-
-surroundBrackets : String -> String
-surroundBrackets string =
-  "[" ++ string ++ "]"
-
-surroundParen : String -> String
-surroundParen string =
-  "(" ++ string ++ ")"
-
-body : Query -> Http.Body
-body query =
+queryBody : Body -> Http.Body
+queryBody (Body body) =
   Http.jsonBody <|
     Encode.object
-      [ ( "query", encodeQuery query ) ]
+      [ ( "query", encodeQuery body.name body.fields ) ]
 
-encodeQuery : Query -> Encode.Value
-encodeQuery =
-  Encode.string << encodeQueryAsString
+encodeQuery : Maybe String -> List Field -> Encode.Value
+encodeQuery name =
+  Encode.string << encodeQueryAsString name
 
-encodeQueryAsString : Query -> String
-encodeQueryAsString (Query query) =
-  query
-    |> List.map encodeField
+encodeQueryAsString : Maybe String -> List Field -> String
+encodeQueryAsString name fields =
+  fields
+    |> List.map Field.encodeField
     |> String.join "\n"
-    |> surroundBraces
-
-encodeField : Field -> String
-encodeField (Field field) =
-  field.id
-    |> reverseAdd (addArguments field.arguments)
-    |> reverseAdd (addSelectors field.selectors)
-
-reverseAdd : String -> String -> String
-reverseAdd =
-  flip (++)
-
-addSelectors : List Field -> String
-addSelectors selectors =
-  if List.isEmpty selectors then
-    ""
-  else
-    selectors
-      |> List.map encodeField
-      |> String.join "\n"
-      |> surroundBraces
-
-addArguments : List ( String, String ) -> String
-addArguments arguments =
-  if List.isEmpty arguments then
-    ""
-  else
-    arguments
-      |> List.map toGraphQlArg
-      |> String.join ", "
-      |> surroundParen
-
-toGraphQlArg : ( String, String ) -> String
-toGraphQlArg ( param, value ) =
-  param ++ ": " ++ value
+    |> Helpers.surroundBraces
+    |> (++) ("query " ++ Maybe.withDefault "" name)
 
 decodeGraphQlQueries : Decode.Decoder a -> Decode.Decoder a
 decodeGraphQlQueries =

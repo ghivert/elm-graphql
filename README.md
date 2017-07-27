@@ -78,7 +78,7 @@ decodeNameAndAddress =
 
 userRequest : Int -> Query
 userRequest id =
-  query
+  root
     [ field "user"
       |> withIntArg ( "id", id )
       |> withSelectors
@@ -100,7 +100,7 @@ userRequest id =
 
 baseRequest : Query -> Decoder a -> Request a
 baseRequest =
-  GraphQl.request "/example_endpoint"
+  GraphQl.query "/example_endpoint"
 
 
 sendRequest : Cmd Msg
