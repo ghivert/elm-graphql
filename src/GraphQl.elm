@@ -1,6 +1,6 @@
 module GraphQl
   exposing
-    ( Value, Request, Argument
+    ( Value, Root, Field, Request, Argument
     , query, addVariables
     , object, named, field
     , withArgument, withVariable, withSelectors, withAlias
@@ -51,6 +51,8 @@ sendRequest id decoder =
 
 # Value
 @docs Value
+@docs Root
+@docs Field
 
 # Constructors
 @docs object
@@ -88,7 +90,7 @@ import Helpers
 
 {-| Requests contains the query and the variables of each GraphQl requests. -}
 type Request a
-  = Query String Value (Decoder a) (Maybe (List (String, Encode.Value)))
+  = Query String (Value Root) (Decoder a) (Maybe (List (String, Encode.Value)))
 
 {-| Entry of every GraphQL values to turn them into requests, which can be launched!
 
@@ -96,7 +98,7 @@ type Request a
       |> flip (query "https://example.com") decoder
       |> send msg
 -}
-query : String -> Value -> Decoder a -> Request a
+query : String -> Value Root -> Decoder a -> Request a
 query endpoint query_ decoder =
   Query endpoint query_ decoder Nothing
 
@@ -115,13 +117,21 @@ addVariables variables request =
 
 
 
+{-| -}
+type Root =
+  Root
+
+{-| -}
+type Field =
+  Field
+
 {-| Handle GraphQL values. -}
-type Value =
+type Value a =
   Value Value.Value
 
-extractValue : Value -> Value.Value
-extractValue (Value field) =
-  field
+extractValue : Value a -> Value.Value
+extractValue (Value value) =
+  value
 
 {-| Handle arguments on GraphQL fields. -}
 type Argument =
@@ -138,7 +148,7 @@ Turns into:
       user
     }
 -}
-object : List Value -> Value
+object : List (Value Field) -> Value Root
 object selectors =
   selectors
     |> List.map extractValue
@@ -156,13 +166,16 @@ Turns into:
       user
     }
 -}
-named : String -> List Value -> Value
+named : String -> List (Value Field) -> Value Root
 named id selectors =
-  field id
-    |> withSelectors selectors
+  selectors
+    |> List.map extractValue
+    |> Value.addSelectorsIn Value.new
+    |> Value.setId id
+    |> Value
 
 {-| Generate a field. -}
-field : String -> Value
+field : String -> Value Field
 field id =
   Value.new
     |> Value.setId id
@@ -170,14 +183,17 @@ field id =
 
 {-| Add a variable to a Field.
 
-    field "user"
+    named "UserRequest"
+      [ field "user" ]
       |> withVariable "id" "id"
 
 Turns into:
 
-    user(id: $id)
+    query UserRequest(id: $id) {
+      user
+    }
 -}
-withVariable : String -> String -> Value -> Value
+withVariable : String -> String -> Value Root -> Value Root
 withVariable name content (Value value) =
   ("$" ++ name, content)
     |> Value.addInValueVariables value
@@ -200,7 +216,7 @@ Turns into:
       last_name
     }
 -}
-withSelectors : List Value -> Value -> Value
+withSelectors : List (Value Field) -> Value Field -> Value Field
 withSelectors selectors (Value value) =
   selectors
     |> List.map extractValue
@@ -225,7 +241,7 @@ Turns into:
       last_name
     }
 -}
-withAlias : String -> Value -> Value
+withAlias : String -> Value Field -> Value Field
 withAlias alias (Value value) =
   value
     |> Value.setAlias alias
@@ -249,7 +265,7 @@ Turns into:
       last_name
     }
 -}
-withArgument : String -> Argument -> Value -> Value
+withArgument : String -> Argument -> Value Field -> Value Field
 withArgument name (Argument content) (Value value) =
   (name, content)
     |> Value.addInValueArguments value
@@ -324,7 +340,7 @@ toHttpRequest request =
         (queryToBody query_ variables)
         (Decode.field "data" decoder)
 
-queryToBody : Value -> Maybe (List (String, Encode.Value)) -> Http.Body
+queryToBody : Value a -> Maybe (List (String, Encode.Value)) -> Http.Body
 queryToBody value variables =
   Http.jsonBody <|
     Encode.object <|
@@ -337,7 +353,7 @@ queryToBody value variables =
           |> Maybe.withDefault []
         ]
 
-encodeQuery : Value -> String
+encodeQuery : Value a -> String
 encodeQuery (Value value) =
   value
     |> Value.encodeValue
