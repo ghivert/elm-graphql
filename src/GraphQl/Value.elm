@@ -53,7 +53,7 @@ setVariables variables (Value value) =
 
 addSelectorsIn : Value -> List Value -> Value
 addSelectorsIn (Value value) selectors =
-  Value { value | selectors = selectors }
+  Value { value | selectors = List.append selectors value.selectors }
 
 swapArgumentsAndVariables : Value -> Value
 swapArgumentsAndVariables (Value value) =
