@@ -82,7 +82,7 @@ import Json.Decode as Decode exposing (Decoder, field)
 import Types exposing (User, Address, Msg(..))
 
 
-userRequest : GraphQl.Value
+userRequest : GraphQl.Value Root
 userRequest =
   GraphQl.object
     [ GraphQl.field "user"

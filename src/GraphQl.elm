@@ -17,7 +17,7 @@ Every user of Elm should not be lost using this package.
 import GraphQl
 
 -- Define the request.
-userRequest : GraphQl.Value
+userRequest : GraphQl.Value Root
 userRequest =
   GraphQl.object
     [ GraphQl.field "user"
@@ -42,11 +42,11 @@ userRequest =
     |> GraphQl.withVariable "id" "INT!"
 
 -- And Send It!
-sendRequest : Int -> Decoder a -> Cmd msg
-sendRequest id decoder =
+sendRequest : Int -> (Result Http.Error a -> msg) -> Decoder a -> Cmd msg
+sendRequest id msg decoder =
   GraphQl.query "/example_endpoint" userRequest decoder
     |> GraphQl.addVariables [ ("id", Encode.int id) ]
-    |> GraphQl.send
+    |> GraphQl.send msg
 ```
 
 # Value
