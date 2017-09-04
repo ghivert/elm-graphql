@@ -1,7 +1,7 @@
 module GraphQl
   exposing
     ( Value, Root, Field, Request, Argument
-    , query, addVariables
+    , query, mutation, addVariables
     , object, named, field
     , withArgument, withVariable, withSelectors, withAlias
     , variable, type_, int, string
@@ -75,6 +75,7 @@ sendRequest id msg decoder =
 # Requests
 @docs Request
 @docs query
+@docs mutation
 @docs addVariables
 @docs send
 
@@ -87,12 +88,12 @@ import GraphQl.Value as Value
 import Helpers
 
 
-
 {-| Requests contains the query and the variables of each GraphQl requests. -}
 type Request a
   = Query String (Value Root) (Decoder a) (Maybe (List (String, Encode.Value)))
+  | Mutation String (Value Root) (Decoder a) (Maybe (List (String, Encode.Value)))
 
-{-| Entry of every GraphQL values to turn them into requests, which can be launched!
+{-| Entry of every GraphQL values to turn them into query requests, which can be launched!
 
     object []
       |> flip (query "https://example.com") decoder
@@ -101,6 +102,11 @@ type Request a
 query : String -> Value Root -> Decoder a -> Request a
 query endpoint query_ decoder =
   Query endpoint query_ decoder Nothing
+
+{-| Similar to GraphQl.query, but creates a mutation request instead of a query. -}
+mutation : String -> Value Root -> Decoder a -> Request a
+mutation endpoint mutation_ decoder =
+    Mutation endpoint mutation_ decoder Nothing
 
 {-| Add variables to a requests. Useful when defining variables in your GraphQL request.
 
@@ -114,7 +120,8 @@ addVariables variables request =
   case request of
     Query endpoint query_ decoder _ ->
       Query endpoint query_ decoder (Just variables)
-
+    Mutation endpoint mutation_ decoder _ ->
+      Mutation endpoint mutation_ decoder (Just variables)
 
 
 {-| -}
@@ -339,6 +346,10 @@ toHttpRequest request =
       Http.post endpoint
         (queryToBody query_ variables)
         (Decode.field "data" decoder)
+    Mutation endpoint mutation_ decoder variables ->
+      Http.post endpoint
+        (mutationToBody mutation_ variables)
+        (Decode.field "data" decoder)
 
 queryToBody : Value a -> Maybe (List (String, Encode.Value)) -> Http.Body
 queryToBody value variables =
@@ -358,3 +369,22 @@ encodeQuery (Value value) =
   value
     |> Value.encodeValue
     |> (++) "query "
+
+mutationToBody : Value a -> Maybe (List ( String, Encode.Value )) -> Http.Body
+mutationToBody value variables =
+  Http.jsonBody <|
+    Encode.object <|
+      List.concat
+        [ [ ( "query", Encode.string <| encodeMutation value ) ]
+        , variables
+          |> Maybe.map Encode.object
+          |> Maybe.map ((,) "variables")
+          |> Maybe.map List.singleton
+          |> Maybe.withDefault []
+        ]
+
+encodeMutation : Value a -> String
+encodeMutation (Value value) =
+  value
+    |> Value.encodeValue
+    |> (++) "mutation "
