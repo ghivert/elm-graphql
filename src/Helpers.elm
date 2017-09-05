@@ -27,3 +27,7 @@ betweenParen string =
 betweenNewline : String -> String
 betweenNewline =
   between "\n"
+
+join : List String -> String
+join list =
+  String.join ", " list

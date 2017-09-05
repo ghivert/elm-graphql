@@ -110,7 +110,7 @@ addArguments arguments =
   else
     arguments
       |> List.map joinGraphQlArgument
-      |> String.join ", "
+      |> Helpers.join
       |> Helpers.betweenParen
 
 joinGraphQlArgument : (String, String) -> String
