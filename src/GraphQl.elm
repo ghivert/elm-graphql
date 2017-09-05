@@ -4,7 +4,7 @@ module GraphQl
     , query, mutation, addVariables
     , object, named, field
     , withArgument, withVariable, withSelectors, withAlias
-    , variable, type_, int, string
+    , variable, type_, int, string, input, nestedInput
     , send
     )
 
@@ -71,6 +71,8 @@ sendRequest id msg decoder =
 @docs string
 @docs type_
 @docs variable
+@docs input
+@docs nestedInput
 
 # Requests
 @docs Request
@@ -143,6 +145,12 @@ extractValue (Value value) =
 {-| Handle arguments on GraphQL fields. -}
 type Argument =
   Argument String
+
+type alias InputType =
+  List InputField
+
+type alias InputField =
+  (String, Argument)
 
 {-| Generate a Value, from a list of fields.
 
@@ -321,7 +329,7 @@ string =
 {-| Generate an argument, to use with `withArgument`.
 Generate a type in GraphQL.
 
-    fied "user"
+    field "user"
       |> withArgument "id" (GraphQl.type_ "INT")
 
 Turns into:
@@ -331,6 +339,65 @@ Turns into:
 type_ : String -> Argument
 type_ =
   Argument
+
+{-| Generate an argument, to use with 'withArgument'.
+
+    field "CreateUser"
+      |> withArgument "user"
+        (GraphQl.input
+          [ ("first", (GraphQl.string "John"))
+          , ("last", (GraphQl.string "Doe"))
+          ]
+        )
+
+Turns into:
+
+    CreateUser(user: {first: "John", last: "Doe"})
+-}
+input : InputType -> Argument
+input input =
+  input
+    |> inputToString
+    |> Argument
+{-| Generate an argument, to use with 'withArgument'.
+
+    field "CreateUser"
+      |> withArgument "users"
+        (GraphQl.nestedInput
+          [ [ ("first", (GraphQl.string "John"))
+            , ("last", (GraphQl.string "Doe"))
+            ]
+          , [ ("first", (GraphQl.string "Jane"))
+            , ("last", (GraphQl.string "Smith"))
+            ]
+          ]
+        )
+
+Turns into:
+
+    CreateUsers(users: [
+      {first: "John", last: "Doe"},
+      {first: "Jane", last: "Smith"}
+    ])
+-}
+nestedInput : List InputType -> Argument
+nestedInput nestedInput =
+  nestedInput
+    |> List.map inputToString
+    |> Helpers.join
+    |> Helpers.betweenBrackets
+    |> Argument
+
+inputToString : InputType -> String
+inputToString input =
+  input
+    |> List.map addInputField
+    |> Helpers.join
+    |> Helpers.betweenBraces
+
+addInputField : InputField -> String
+addInputField (param, Argument value) =
+    param ++ ": " ++ value
 
 
 
