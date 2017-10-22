@@ -1,6 +1,6 @@
 module GraphQl
   exposing
-    ( Value, Root, Field, Request, Argument
+    ( Value, Anonymous, Field, Request, Argument
     , query, addVariables
     , object, named, field
     , withArgument, withVariable, withSelectors, withAlias
@@ -51,7 +51,7 @@ sendRequest id msg decoder =
 
 # Value
 @docs Value
-@docs Root
+@docs Anonymous
 @docs Field
 
 # Constructors
@@ -89,8 +89,8 @@ import Helpers
 
 
 {-| Requests contains the query and the variables of each GraphQl requests. -}
-type Request a
-  = Query String (Value Root) (Decoder a) (Maybe (List (String, Encode.Value)))
+type Request a b
+  = Request OperationType String (Operation a) (Decoder b) (Maybe (List (String, Encode.Value)))
 
 {-| Entry of every GraphQL values to turn them into requests, which can be launched!
 
@@ -98,9 +98,13 @@ type Request a
       |> flip (query "https://example.com") decoder
       |> send msg
 -}
-query : String -> Value Root -> Decoder a -> Request a
+query : String -> Operation a -> Decoder b -> Request a b
 query endpoint query_ decoder =
-  Query endpoint query_ decoder Nothing
+  Request Query endpoint query_ decoder Nothing
+
+mutation : String -> Operation a -> Decoder b -> Request a b
+mutation endpoint query_ decoder =
+  Request Mutation endpoint query_ decoder Nothing
 
 {-| Add variables to a requests. Useful when defining variables in your GraphQL request.
 
@@ -109,33 +113,40 @@ query endpoint query_ decoder =
       |> addVariables []
       |> send msg
 -}
-addVariables : List (String, Encode.Value) -> Request a -> Request a
-addVariables variables request =
-  case request of
-    Query endpoint query_ decoder _ ->
-      Query endpoint query_ decoder (Just variables)
+addVariables : List (String, Encode.Value) -> Request Variables a -> Request Variables a
+addVariables variables (Request type_ endpoint operation decoder _) =
+  Request type_ endpoint operation decoder (Just variables)
 
 
 
-{-| -}
-type Root =
-  Root
+type OperationType
+  = Query
+  | Mutation
 
 {-| -}
-type Field =
-  Field
+type Anonymous
+  = Anonymous
+
+type Named
+  = Named
+
+type Variables
+  = Variables
+  
+{-| -}
+type Field
+  = Field
 
 {-| Handle GraphQL values. -}
-type Value a =
-  Value Value.Value
+type alias Value
+  = Value.Value
 
-extractValue : Value a -> Value.Value
-extractValue (Value value) =
-  value
+type Operation a
+  = Operation Value.Value
 
 {-| Handle arguments on GraphQL fields. -}
-type Argument =
-  Argument String
+type Argument
+  = Argument String
 
 {-| Generate a Value, from a list of fields.
 
@@ -148,12 +159,11 @@ Turns into:
       user
     }
 -}
-object : List (Value Field) -> Value Root
+object : List Value -> Operation Anonymous
 object selectors =
   selectors
-    |> List.map extractValue
     |> Value.addSelectorsIn Value.new
-    |> Value
+    |> Operation
 
 {-| Generate a Value with a name.
 
@@ -166,20 +176,18 @@ Turns into:
       user
     }
 -}
-named : String -> List (Value Field) -> Value Root
+named : String -> List Value -> Operation Named
 named id selectors =
   selectors
-    |> List.map extractValue
     |> Value.addSelectorsIn Value.new
     |> Value.setId id
-    |> Value
+    |> Operation
 
 {-| Generate a field. -}
-field : String -> Value Field
+field : String -> Value
 field id =
   Value.new
     |> Value.setId id
-    |> Value
 
 {-| Add a variable to a Field.
 
@@ -193,11 +201,11 @@ Turns into:
       user
     }
 -}
-withVariable : String -> String -> Value Root -> Value Root
-withVariable name content (Value value) =
+withVariable : String -> String -> Operation Named -> Operation Variables
+withVariable name content (Operation value) =
   ("$" ++ name, content)
     |> Value.addInValueVariables value
-    |> Value
+    |> Operation
 
 {-| Add selectors to a Field.
 
@@ -216,12 +224,9 @@ Turns into:
       last_name
     }
 -}
-withSelectors : List (Value Field) -> Value Field -> Value Field
-withSelectors selectors (Value value) =
-  selectors
-    |> List.map extractValue
-    |> Value.addSelectorsIn value
-    |> Value
+withSelectors : List Value -> Value -> Value
+withSelectors selectors value =
+  selectors |> Value.addSelectorsIn value
 
 {-| Add an alias to a Field.
 
@@ -241,11 +246,9 @@ Turns into:
       last_name
     }
 -}
-withAlias : String -> Value Field -> Value Field
-withAlias alias (Value value) =
-  value
-    |> Value.setAlias alias
-    |> Value
+withAlias : String -> Value -> Value
+withAlias alias value =
+  value |> Value.setAlias alias
 
 {-| Add an argument to a Field.
 
@@ -265,11 +268,9 @@ Turns into:
       last_name
     }
 -}
-withArgument : String -> Argument -> Value Field -> Value Field
-withArgument name (Argument content) (Value value) =
-  (name, content)
-    |> Value.addInValueArguments value
-    |> Value
+withArgument : String -> Argument -> Value -> Value
+withArgument name (Argument content) value =
+  (name, content) |> Value.addInValueArguments value
 
 {-| Generate an argument, to use with `withArgument`.
 You don't have to handle the $ sign.
@@ -325,36 +326,103 @@ type_ : String -> Argument
 type_ =
   Argument
 
+{-| Generate an argument, to use with 'withArgument'.
+
+    field "CreateUser"
+      |> withArgument "user"
+        (GraphQl.input
+          [ ("first", (GraphQl.string "John"))
+          , ("last", (GraphQl.string "Doe"))
+          ]
+        )
+
+Turns into:
+
+    CreateUser(user: {first: "John", last: "Doe"})
+-}
+input : List (String, Argument) -> Argument
+input input =
+  input
+    |> inputToString
+    |> Argument
+
+{-| Generate an argument, to use with 'withArgument'.
+
+    field "CreateUser"
+      |> withArgument "users"
+        (GraphQl.nestedInput
+          [ [ ("first", (GraphQl.string "John"))
+            , ("last", (GraphQl.string "Doe"))
+            ]
+          , [ ("first", (GraphQl.string "Jane"))
+            , ("last", (GraphQl.string "Smith"))
+            ]
+          ]
+        )
+
+Turns into:
+
+    CreateUsers(users: [
+      {first: "John", last: "Doe"},
+      {first: "Jane", last: "Smith"}
+    ])
+-}
+nestedInput : List (List (String, Argument)) -> Argument
+nestedInput nestedInput =
+  nestedInput
+    |> List.map inputToString
+    |> String.join ", "
+    |> Helpers.betweenBrackets
+    |> Argument
+
+inputToString : List (String, Argument) -> String
+inputToString input =
+  input
+    |> List.map addInputField
+    |> String.join ", "
+    |> Helpers.betweenBraces
+
+addInputField : (String, Argument) -> String
+addInputField ( param, Argument operation ) =
+    param ++ ": " ++ operation
 
 
 {-| Actually send the GraphQL request! Generates a Cmd, to give to Elm in your update. -}
-send : (Result Http.Error a -> msg) -> Request a -> Cmd msg
+send : (Result Http.Error a -> msg) -> Request b a -> Cmd msg
 send msg =
   Http.send msg << toHttpRequest
 
-toHttpRequest : Request a -> Http.Request a
+toHttpRequest : Request b a -> Http.Request a
 toHttpRequest request =
   case request of
-    Query endpoint query_ decoder variables ->
+    Request type_ endpoint operation decoder variables ->
       Http.post endpoint
-        (queryToBody query_ variables)
+        (operationToBody type_ operation variables)
         (Decode.field "data" decoder)
 
-queryToBody : Value a -> Maybe (List (String, Encode.Value)) -> Http.Body
-queryToBody value variables =
-  Http.jsonBody <|
-    Encode.object <|
-      List.concat
-        [ [ ("query", Encode.string <| encodeQuery value) ]
-        , variables
-          |> Maybe.map Encode.object
-          |> Maybe.map ((,) "variables")
-          |> Maybe.map List.singleton
-          |> Maybe.withDefault []
-        ]
+operationToBody : OperationType -> Operation a -> Maybe (List (String, Encode.Value)) -> Http.Body
+operationToBody type_ value variables =
+  Http.jsonBody
+    <| Encode.object
+    <| List.concat
+      [ [ ("query", Encode.string <| encodeOperation type_ value) ]
+      , variables
+        |> Maybe.map Encode.object
+        |> Maybe.map ((,) "variables")
+        |> Maybe.map List.singleton
+        |> Maybe.withDefault []
+      ]
 
-encodeQuery : Value a -> String
-encodeQuery (Value value) =
+encodeOperation : OperationType -> Operation a -> String
+encodeOperation type_ (Operation value) =
   value
     |> Value.encodeValue
-    |> (++) "query "
+    |> (++) (operationToString type_)
+
+operationToString : OperationType -> String
+operationToString type_ =
+  case type_ of
+    Mutation ->
+      "mutation "
+    Query ->
+      "query "
