@@ -4,7 +4,7 @@ module GraphQl
     , query, mutation, addVariables
     , object, named, field
     , withArgument, withVariables, withSelectors, withAlias
-    , variable, type_, int, string, input, nestedInput
+    , variable, type_, int, bool, string, input, nestedInput
     , send
     )
 
@@ -88,6 +88,7 @@ sendRequest id msg decoder =
 # Arguments
 @docs Argument
 @docs int
+@docs bool
 @docs string
 @docs type_
 @docs variable
@@ -344,6 +345,24 @@ Turns into:
 int : Int -> Argument a
 int =
   Argument << toString
+
+{-| Generates an argument, to use with `withArgument`.
+
+    field "user"
+      |> withArgument "admin" (GraphQl.bool False)
+
+Turns into:
+
+    user(id: false)
+-}
+bool : Bool -> Argument a
+bool value =
+  Argument <|
+    case value of
+      True ->
+        "true"
+      False ->
+        "false"
 
 {-| Generates an argument, to use with `withArgument`.
 
