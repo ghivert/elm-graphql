@@ -95,6 +95,7 @@ sendRequest id msg decoder =
 @docs variable
 @docs input
 @docs nestedInput
+@docs queryArgs
 
 # Requests
 @docs Request
