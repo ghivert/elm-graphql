@@ -4,7 +4,7 @@ module GraphQl
     , query, mutation, addVariables
     , object, named, field
     , withArgument, withVariables, withSelectors, withAlias
-    , variable, type_, int, float, bool, string, input, nestedInput
+    , variable, type_, int, float, bool, string, input, nestedInput, queryArgs
     , send
     )
 
@@ -454,6 +454,23 @@ nestedInput nestedInput =
     |> Helpers.betweenBrackets
     |> Argument
 
+{-| Generates a query argument, to use with 'withArgument'. Works like 'input' but for querys.
+    field "users"
+      |> withArgument "user"
+        (GraphQl.queryArgs
+          [ ("name", (GraphQl.string "John"))
+          , ("last", (GraphQl.string "Doe"))
+          ]
+        )
+Turns into:
+    users(user: {name: "John", last: "Doe"})
+-}
+queryArgs : List ( String, Argument Query ) -> Argument Query
+queryArgs args =
+    args
+        |> argsToString
+        |> Argument
+
 inputToString : List (String, Argument Mutation) -> String
 inputToString input =
   input
@@ -465,7 +482,16 @@ addInputField : (String, Argument Mutation) -> String
 addInputField ( param, Argument operation ) =
     param ++ ": " ++ operation
 
+argsToString : List ( String, Argument Query ) -> String
+argsToString args =
+    args
+        |> List.map addArgField
+        |> String.join ", "
+        |> Helpers.betweenBraces
 
+addArgField : ( String, Argument Query ) -> String
+addArgField ( param, Argument operation ) =
+    param ++ ": " ++ operation
 
 {-| Sends the GraphQL request! Generates a Cmd, to feed the runtime in your update. -}
 send : (Result Http.Error c -> msg) -> Request a b c -> Cmd msg
