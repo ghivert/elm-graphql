@@ -421,9 +421,9 @@ Turns into:
     CreateUser(user: {first: "John", last: "Doe"})
 -}
 input : List (String, Argument Mutation) -> Argument Mutation
-input input =
-  input
-    |> inputToString
+input inputs =
+  inputs
+    |> argsToString
     |> Argument
 
 {-| Generates an argument, to use with 'withArgument'.
@@ -448,9 +448,9 @@ Turns into:
     ])
 -}
 nestedInput : List (List (String, Argument Mutation)) -> Argument Mutation
-nestedInput nestedInput =
-  nestedInput
-    |> List.map inputToString
+nestedInput nestedInputs =
+  nestedInputs
+    |> List.map argsToString
     |> String.join ", "
     |> Helpers.betweenBrackets
     |> Argument
@@ -466,32 +466,21 @@ nestedInput nestedInput =
 Turns into:
     users(user: {name: "John", last: "Doe"})
 -}
-queryArgs : List ( String, Argument Query ) -> Argument Query
+queryArgs : List (String, Argument Query) -> Argument Query
 queryArgs args =
     args
         |> argsToString
         |> Argument
 
-inputToString : List (String, Argument Mutation) -> String
-inputToString input =
-  input
-    |> List.map addInputField
+argsToString : List (String, Argument a) -> String
+argsToString args =
+  args
+    |> List.map addArgField
     |> String.join ", "
     |> Helpers.betweenBraces
 
-addInputField : (String, Argument Mutation) -> String
-addInputField ( param, Argument operation ) =
-    param ++ ": " ++ operation
-
-argsToString : List ( String, Argument Query ) -> String
-argsToString args =
-    args
-        |> List.map addArgField
-        |> String.join ", "
-        |> Helpers.betweenBraces
-
-addArgField : ( String, Argument Query ) -> String
-addArgField ( param, Argument operation ) =
+addArgField : (String, Argument a) -> String
+addArgField (param, Argument operation) =
     param ++ ": " ++ operation
 
 {-| Sends the GraphQL request! Generates a Cmd, to feed the runtime in your update. -}
