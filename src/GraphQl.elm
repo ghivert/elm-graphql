@@ -5,7 +5,7 @@ module GraphQl
     , object, named, field
     , withArgument, withVariables, withSelectors, withAlias
     , variable, type_, int, float, bool, string, input, nestedInput, queryArgs
-    , send
+    , send, toJson
     )
 
 {-| GraphQL queries and mutations made easy in Elm!
@@ -103,6 +103,7 @@ sendRequest id msg decoder =
 @docs mutation
 @docs addVariables
 @docs send
+@docs toJson
 
 -}
 
@@ -204,10 +205,8 @@ Turns into:
     }
 -}
 object : List (Value a) -> Operation a Anonymous
-object selectors =
-  selectors
-    |> Value.addSelectorsIn Value.new
-    |> Operation
+object =
+  Value.addSelectorsIn Value.new >> Operation
 
 {-| Generates a Value with a name.
 
@@ -221,17 +220,15 @@ Turns into:
     }
 -}
 named : String -> List (Value a) -> Operation a Named
-named id selectors =
-  selectors
-    |> Value.addSelectorsIn Value.new
-    |> Value.setId id
-    |> Operation
+named id =
+  Value.addSelectorsIn Value.new
+    >> Value.setId id
+    >> Operation
 
 {-| Generates a field. -}
 field : String -> Value a
 field id =
-  Value.new
-    |> Value.setId id
+  Value.setId id Value.new
 
 {-| Adds variables to an Operation.
 
@@ -275,7 +272,7 @@ Turns into:
 -}
 withSelectors : List (Value a) -> Value a -> Value a
 withSelectors selectors value =
-  selectors |> Value.addSelectorsIn value
+  Value.addSelectorsIn value selectors
 
 {-| Adds an alias to a Field.
 
@@ -296,8 +293,8 @@ Turns into:
     }
 -}
 withAlias : String -> Value a -> Value a
-withAlias alias value =
-  value |> Value.setAlias alias
+withAlias alias_ value =
+  Value.setAlias alias_ value
 
 {-| Adds an argument to a Field.
 
@@ -319,7 +316,7 @@ Turns into:
 -}
 withArgument : String -> Argument a -> Value a -> Value a
 withArgument name (Argument content) value =
-  (name, content) |> Value.addInValueArguments value
+  Value.addInValueArguments value (name, content)
 
 {-| Generates an argument, to use with `withArgument`.
 You don't have to handle the $ sign.
@@ -346,7 +343,7 @@ Turns into:
 -}
 int : Int -> Argument a
 int =
-  Argument << toString
+   toString >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -359,7 +356,7 @@ Turns into:
 -}
 float : Float -> Argument a
 float =
-  Argument << toString
+  toString >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -390,7 +387,7 @@ Turns into:
 -}
 string : String -> Argument a
 string =
-  Argument << Helpers.betweenQuotes
+  Helpers.betweenQuotes >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 Generate a type in GraphQL.
@@ -421,10 +418,8 @@ Turns into:
     CreateUser(user: {first: "John", last: "Doe"})
 -}
 input : List (String, Argument Mutation) -> Argument Mutation
-input inputs =
-  inputs
-    |> argsToString
-    |> Argument
+input =
+  argsToString >> Argument
 
 {-| Generates an argument, to use with 'withArgument'.
 
@@ -448,12 +443,11 @@ Turns into:
     ])
 -}
 nestedInput : List (List (String, Argument Mutation)) -> Argument Mutation
-nestedInput nestedInputs =
-  nestedInputs
-    |> List.map argsToString
-    |> String.join ", "
-    |> Helpers.betweenBrackets
-    |> Argument
+nestedInput =
+  List.map argsToString
+    >> String.join ", "
+    >> Helpers.betweenBrackets
+    >> Argument
 
 {-| Generates a query argument, to use with 'withArgument'. Works like 'input' but for querys.
     field "users"
@@ -467,17 +461,14 @@ Turns into:
     users(user: {name: "John", last: "Doe"})
 -}
 queryArgs : List (String, Argument Query) -> Argument Query
-queryArgs args =
-    args
-        |> argsToString
-        |> Argument
+queryArgs =
+  argsToString >> Argument
 
 argsToString : List (String, Argument a) -> String
-argsToString args =
-  args
-    |> List.map addArgField
-    |> String.join ", "
-    |> Helpers.betweenBraces
+argsToString =
+  List.map addArgField
+    >> String.join ", "
+    >> Helpers.betweenBraces
 
 addArgField : (String, Argument a) -> String
 addArgField (param, Argument operation) =
@@ -488,18 +479,20 @@ send : (Result Http.Error c -> msg) -> Request a b c -> Cmd msg
 send msg =
   Http.send msg << toHttpRequest
 
-toHttpRequest : Request a b c -> Http.Request c
-toHttpRequest request =
-  case request of
-    Request type_ endpoint operation decoder variables ->
-      Http.post endpoint
-        (operationToBody type_ operation variables)
-        (Decode.field "data" decoder)
+{-| Extract the JSON part of a `Request` to use it into your own requests. -}
+toJson : Request a b c -> Encode.Value
+toJson (Request type_ endpoint operation decoder variables) =
+  operationToJson type_ operation variables
 
-operationToBody : OperationType -> Operation a b -> Maybe (List (String, Encode.Value)) -> Http.Body
-operationToBody type_ value variables =
-  Http.jsonBody
-    <| Encode.object
+toHttpRequest : Request a b c -> Http.Request c
+toHttpRequest (Request type_ endpoint operation decoder variables) =
+  Http.post endpoint
+    (Http.jsonBody (operationToJson type_ operation variables))
+    (Decode.field "data" decoder)
+
+operationToJson : OperationType -> Operation a b -> Maybe (List (String, Encode.Value)) -> Encode.Value
+operationToJson type_ value variables =
+  Encode.object
     <| List.concat
       [ [ ("query", Encode.string <| encodeOperation type_ value) ]
       , variables
