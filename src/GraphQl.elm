@@ -5,7 +5,7 @@ module GraphQl
     , object, named, field
     , withArgument, withVariables, withSelectors, withAlias
     , variable, type_, int, float, bool, string, input, nestedInput, queryArgs
-    , send, toJson
+    , send, toJson, toHttpRequest
     )
 
 {-| GraphQL queries and mutations made easy in Elm!
@@ -104,6 +104,7 @@ sendRequest id msg decoder =
 @docs addVariables
 @docs send
 @docs toJson
+@docs toHttpRequest
 
 -}
 
@@ -474,7 +475,9 @@ addArgField : (String, Argument a) -> String
 addArgField (param, Argument operation) =
     param ++ ": " ++ operation
 
-{-| Sends the GraphQL request! Generates a Cmd, to feed the runtime in your update. -}
+{-| Deprecated! Will be removed in next version.
+Should be replaced with `GraphQl.toHttpRequest |> Http.send`.
+Sends the GraphQL request! Generates a Cmd, to feed the runtime in your update. -}
 send : (Result Http.Error c -> msg) -> Request a b c -> Cmd msg
 send msg =
   Http.send msg << toHttpRequest
@@ -484,6 +487,7 @@ toJson : Request a b c -> Encode.Value
 toJson (Request type_ endpoint operation decoder variables) =
   operationToJson type_ operation variables
 
+{-| Transform a request into an `Http.Request`. -}
 toHttpRequest : Request a b c -> Http.Request c
 toHttpRequest (Request type_ endpoint operation decoder variables) =
   Http.post endpoint
