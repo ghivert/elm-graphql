@@ -1,6 +1,6 @@
 module GraphQl
   exposing
-    ( Operation, Value, Anonymous, Named, Variables, Mutation, Query, Request, Argument
+    ( Operation, Field, Anonymous, Named, Variables, Mutation, Query, Request, Argument
     , query, mutation, addVariables
     , object, named, field
     , withArgument, withVariables, withSelectors, withAlias
@@ -65,9 +65,9 @@ sendRequest id msg decoder =
     |> GraphQl.send msg
 ```
 
-# Value
+# Field
 @docs Operation
-@docs Value
+@docs Field
 @docs Anonymous
 @docs Named
 @docs Variables
@@ -111,7 +111,7 @@ sendRequest id msg decoder =
 import Http
 import Json.Encode as Encode
 import Json.Decode as Decode exposing (Decoder)
-import GraphQl.Value as Value
+import GraphQl.Field as Field
 import Helpers
 
 
@@ -183,18 +183,18 @@ type Variables
   = Variables
 
 {-| Handle GraphQL values. -}
-type alias Value a
-  = Value.Value a
+type alias Field a
+  = Field.Field a
 
 {-| Handle GraphQL operations -}
 type Operation a b
-  = Operation (Value.Value a)
+  = Operation (Field.Field a)
 
 {-| Handle arguments on GraphQL fields. -}
 type Argument a
   = Argument String
 
-{-| Generates a Value, from a list of fields.
+{-| Generates a Field, from a list of fields.
 
     object
       [ field "user" ]
@@ -205,11 +205,11 @@ Turns into:
       user
     }
 -}
-object : List (Value a) -> Operation a Anonymous
+object : List (Field a) -> Operation a Anonymous
 object =
-  Value.addSelectorsIn Value.new >> Operation
+  Field.addSelectorsIn Field.new >> Operation
 
-{-| Generates a Value with a name.
+{-| Generates a Field with a name.
 
     named "MySuperRequest"
       [ field "user" ]
@@ -220,16 +220,16 @@ Turns into:
       user
     }
 -}
-named : String -> List (Value a) -> Operation a Named
+named : String -> List (Field a) -> Operation a Named
 named id =
-  Value.addSelectorsIn Value.new
-    >> Value.setId id
+  Field.addSelectorsIn Field.new
+    >> Field.setId id
     >> Operation
 
 {-| Generates a field. -}
-field : String -> Value a
+field : String -> Field a
 field id =
-  Value.setId id Value.new
+  Field.setId id Field.new
 
 {-| Adds variables to an Operation.
 
@@ -247,7 +247,7 @@ withVariables : List (String, String) -> Operation a Named -> Operation a Variab
 withVariables values (Operation value) =
   values
     |> List.map generateVariablePair
-    |> List.foldr (flip Value.addInValueVariables) value
+    |> List.foldr (flip Field.addInFieldVariables) value
     |> Operation
 
 generateVariablePair : (String, String) -> (String, String)
@@ -271,9 +271,9 @@ Turns into:
       last_name
     }
 -}
-withSelectors : List (Value a) -> Value a -> Value a
+withSelectors : List (Field a) -> Field a -> Field a
 withSelectors selectors value =
-  Value.addSelectorsIn value selectors
+  Field.addSelectorsIn value selectors
 
 {-| Adds an alias to a Field.
 
@@ -293,9 +293,9 @@ Turns into:
       last_name
     }
 -}
-withAlias : String -> Value a -> Value a
+withAlias : String -> Field a -> Field a
 withAlias alias_ value =
-  Value.setAlias alias_ value
+  Field.setAlias alias_ value
 
 {-| Adds an argument to a Field.
 
@@ -315,9 +315,9 @@ Turns into:
       last_name
     }
 -}
-withArgument : String -> Argument a -> Value a -> Value a
+withArgument : String -> Argument a -> Field a -> Field a
 withArgument name (Argument content) value =
-  Value.addInValueArguments value (name, content)
+  Field.addInFieldArguments value (name, content)
 
 {-| Generates an argument, to use with `withArgument`.
 You don't have to handle the $ sign.
@@ -509,7 +509,7 @@ operationToJson type_ value variables =
 encodeOperation : OperationType -> Operation a b -> String
 encodeOperation type_ (Operation value) =
   value
-    |> Value.encodeValue
+    |> Field.encodeField
     |> (++) (operationToString type_)
 
 operationToString : OperationType -> String
