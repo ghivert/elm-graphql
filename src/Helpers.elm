@@ -1,8 +1,8 @@
 module Helpers exposing (..)
 
 reverseAdd : String -> String -> String
-reverseAdd =
-  flip (++)
+reverseAdd first second =
+  second ++ first
 
 between : String -> String -> String
 between char string =

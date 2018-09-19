@@ -59,13 +59,14 @@ swapArgumentsAndVariables : Field a -> Field a
 swapArgumentsAndVariables (Field value) =
   Field { value | arguments = value.variables }
 
-addInFieldArguments : Field a -> (String, String) -> Field a
-addInFieldArguments (Field value) arg =
+addInFieldArguments : (String, String) -> Field a -> Field a
+addInFieldArguments arg (Field value) =
   setArguments (arg :: value.arguments) (Field value)
 
-addInFieldVariables : Field a -> (String, String) -> Field a
-addInFieldVariables (Field value) var =
+addInFieldVariables : (String, String) -> Field a -> Field a
+addInFieldVariables var (Field value) =
   setVariables (var :: value.variables) (Field value)
+
 
 
 

@@ -4,10 +4,9 @@ module GraphQl
     , query, mutation, addVariables
     , object, named, field
     , withArgument, withVariables, withSelectors, withAlias
-    , variable, type_, int, float, bool, string, input, nestedInput, queryArgs
-    , send, toJson, toHttpRequest
+    , variable, type_, int, float, bool, string, input, nestedInput
+    , toJson
     )
-
 {-| GraphQL queries and mutations made easy in Elm!
 This package provides easier way to deal with GraphQL queries and mutations.
 This package aims to partially mimic the Json Encoders and the HTTP API.
@@ -15,6 +14,7 @@ Every user of Elm should not be lost using this package.
 
 ```
 import GraphQl exposing (Mutation, Query, Variables, Named, Operation)
+import GraphQl.Extra
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -60,9 +60,10 @@ userModifying =
 -- And Send It!
 sendRequest : Int -> (Result Http.Error a -> msg) -> Decoder a -> Cmd msg
 sendRequest id msg decoder =
-  GraphQl.query "/example_endpoint" userRequest decoder
+  GraphQl.query userRequest decoder
     |> GraphQl.addVariables [ ("id", Encode.int id) ]
     |> GraphQl.send msg
+    |> GraphQl.Extra.send "/example_endpoint" decoder
 ```
 
 # Field
@@ -108,7 +109,6 @@ sendRequest id msg decoder =
 
 -}
 
-import Http
 import Json.Encode as Encode
 import Json.Decode as Decode exposing (Decoder)
 import GraphQl.Field as Field
@@ -119,8 +119,8 @@ import Helpers
 {-| Requests contains the query or the mutation and the variables of each GraphQL requests.
 The variables can't be used with an anonymous Request, due to the nature of GraphQL.
 -}
-type Request a b c
-  = Request OperationType String (Operation a b) (Decoder c) (Maybe (List (String, Encode.Value)))
+type Request a b
+  = Request OperationType (Operation a b) (Maybe (List (String, Encode.Value)))
 
 {-| Entry of every GraphQL query to turn them into requests, which can be launched!
 
@@ -128,9 +128,9 @@ type Request a b c
       |> flip (query "https://example.com") decoder
       |> send msg
 -}
-query : String -> Operation Query a -> Decoder b -> Request Query a b
-query endpoint query_ decoder =
-  Request OperationQuery endpoint query_ decoder Nothing
+query : Operation Query a -> Request Query a
+query query_ =
+  Request OperationQuery query_ Nothing
 
 {-| Entry of every GraphQL mutation to turn them into requests, which can be launched!
 
@@ -138,9 +138,9 @@ query endpoint query_ decoder =
       |> flip (mutation "https://example.com") decoder
       |> send msg
 -}
-mutation : String -> Operation Mutation a -> Decoder b -> Request Mutation a b
-mutation endpoint query_ decoder =
-  Request OperationMutation endpoint query_ decoder Nothing
+mutation : Operation Mutation a -> Request Mutation a
+mutation query_ =
+  Request OperationMutation query_ Nothing
 
 {-| Add variables to a request. Useful when defining variables in your GraphQL request.
 If no variables has been defined in your operation, no variables can be added: the
@@ -152,9 +152,9 @@ compiler will reject it.
       |> addVariables [ ("id", Encode.int 12) ]
       |> send msg
 -}
-addVariables : List (String, Encode.Value) -> Request a Variables b -> Request a Variables  b
-addVariables variables (Request type_ endpoint operation decoder _) =
-  Request type_ endpoint operation decoder (Just variables)
+addVariables : List (String, Encode.Value) -> Request a b -> Request a b
+addVariables variables (Request requestType operation _) =
+  Request requestType operation (Just variables)
 
 
 
@@ -191,7 +191,7 @@ type Operation a b
   = Operation (Field.Field a)
 
 {-| Handle arguments on GraphQL fields. -}
-type Argument a
+type Argument
   = Argument String
 
 {-| Generates a Field, from a list of fields.
@@ -247,7 +247,7 @@ withVariables : List (String, String) -> Operation a Named -> Operation a Variab
 withVariables values (Operation value) =
   values
     |> List.map generateVariablePair
-    |> List.foldr (flip Field.addInFieldVariables) value
+    |> List.foldr Field.addInFieldVariables value
     |> Operation
 
 generateVariablePair : (String, String) -> (String, String)
@@ -315,9 +315,9 @@ Turns into:
       last_name
     }
 -}
-withArgument : String -> Argument a -> Field a -> Field a
+withArgument : String -> Argument -> Field a -> Field a
 withArgument name (Argument content) value =
-  Field.addInFieldArguments value (name, content)
+  Field.addInFieldArguments (name, content) value
 
 {-| Generates an argument, to use with `withArgument`.
 You don't have to handle the $ sign.
@@ -329,7 +329,7 @@ Turns into:
 
     user(id: $id)
 -}
-variable : String -> Argument a
+variable : String -> Argument
 variable name =
   Argument ("$" ++ name)
 
@@ -342,9 +342,9 @@ Turns into:
 
     user(id: 12)
 -}
-int : Int -> Argument a
+int : Int -> Argument
 int =
-   toString >> Argument
+   String.fromInt >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -355,9 +355,9 @@ Turns into:
 
     user(id: 12)
 -}
-float : Float -> Argument a
+float : Float -> Argument
 float =
-  toString >> Argument
+  String.fromFloat >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -368,7 +368,7 @@ Turns into:
 
     user(id: false)
 -}
-bool : Bool -> Argument a
+bool : Bool -> Argument
 bool value =
   Argument <|
     case value of
@@ -386,7 +386,7 @@ Turns into:
 
     user(id: "12")
 -}
-string : String -> Argument a
+string : String -> Argument
 string =
   Helpers.betweenQuotes >> Argument
 
@@ -400,7 +400,7 @@ Turns into:
 
     user(id: INT)
 -}
-type_ : String -> Argument a
+type_ : String -> Argument
 type_ =
   Argument
 
@@ -418,7 +418,7 @@ Turns into:
 
     CreateUser(user: {first: "John", last: "Doe"})
 -}
-input : List (String, Argument Mutation) -> Argument Mutation
+input : List (String, Argument) -> Argument
 input =
   argsToString >> Argument
 
@@ -443,78 +443,49 @@ Turns into:
       {first: "Jane", last: "Smith"}
     ])
 -}
-nestedInput : List (List (String, Argument Mutation)) -> Argument Mutation
+nestedInput : List (List (String, Argument)) -> Argument
 nestedInput =
   List.map argsToString
     >> String.join ", "
     >> Helpers.betweenBrackets
     >> Argument
 
-{-| Generates a query argument, to use with 'withArgument'. Works like 'input' but for querys.
-    field "users"
-      |> withArgument "user"
-        (GraphQl.queryArgs
-          [ ("name", (GraphQl.string "John"))
-          , ("last", (GraphQl.string "Doe"))
-          ]
-        )
-Turns into:
-    users(user: {name: "John", last: "Doe"})
--}
-queryArgs : List (String, Argument Query) -> Argument Query
-queryArgs =
-  argsToString >> Argument
-
-argsToString : List (String, Argument a) -> String
+argsToString : List (String, Argument) -> String
 argsToString =
   List.map addArgField
     >> String.join ", "
     >> Helpers.betweenBraces
 
-addArgField : (String, Argument a) -> String
+addArgField : (String, Argument) -> String
 addArgField (param, Argument operation) =
     param ++ ": " ++ operation
 
-{-| Deprecated! Will be removed in next version.
-Should be replaced with `GraphQl.toHttpRequest |> Http.send`.
-Sends the GraphQL request! Generates a Cmd, to feed the runtime in your update. -}
-send : (Result Http.Error c -> msg) -> Request a b c -> Cmd msg
-send msg =
-  Http.send msg << toHttpRequest
-
 {-| Extract the JSON part of a `Request` to use it into your own requests. -}
-toJson : Request a b c -> Encode.Value
-toJson (Request type_ endpoint operation decoder variables) =
-  operationToJson type_ operation variables
-
-{-| Transform a request into an `Http.Request`. -}
-toHttpRequest : Request a b c -> Http.Request c
-toHttpRequest (Request type_ endpoint operation decoder variables) =
-  Http.post endpoint
-    (Http.jsonBody (operationToJson type_ operation variables))
-    (Decode.field "data" decoder)
+toJson : Request a b -> Encode.Value
+toJson (Request requestType operation variables) =
+  operationToJson requestType operation variables
 
 operationToJson : OperationType -> Operation a b -> Maybe (List (String, Encode.Value)) -> Encode.Value
-operationToJson type_ value variables =
+operationToJson requestType value variables =
   Encode.object
     <| List.concat
-      [ [ ("query", Encode.string <| encodeOperation type_ value) ]
+      [ [ ("query", Encode.string <| encodeOperation requestType value) ]
       , variables
         |> Maybe.map Encode.object
-        |> Maybe.map ((,) "variables")
+        |> Maybe.map (Tuple.pair "variables")
         |> Maybe.map List.singleton
         |> Maybe.withDefault []
       ]
 
 encodeOperation : OperationType -> Operation a b -> String
-encodeOperation type_ (Operation value) =
+encodeOperation requestType (Operation value) =
   value
     |> Field.encodeField
-    |> (++) (operationToString type_)
+    |> (++) (operationToString requestType)
 
 operationToString : OperationType -> String
-operationToString type_ =
-  case type_ of
+operationToString requestType =
+  case requestType of
     OperationMutation ->
       "mutation "
     OperationQuery ->
