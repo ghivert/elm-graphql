@@ -7,14 +7,17 @@ module GraphQl
     , variable, type_, int, float, bool, string, input, nestedInput
     , toJson
     )
+
 {-| GraphQL queries and mutations made easy in Elm!
-This package provides easier way to deal with GraphQL queries and mutations.
-This package aims to partially mimic the Json Encoders and the HTTP API.
-Every user of Elm should not be lost using this package.
+This package provides an easier way to deal with GraphQL queries and mutations.
+This package is agnostic about how you send your requests through the wire. It
+could packages the request inside an HTTP post for you with `GraphQl.Http`, but
+also allows you to extract the JSON and send it through whatever way you want,
+WebSocket for example.
 
 ```
 import GraphQl exposing (Mutation, Query, Variables, Named, Operation)
-import GraphQl.Extra
+import GraphQl.Http
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -57,13 +60,12 @@ userModifying =
         )
     ]
 
--- And Send It!
+-- And Send It through HTTP!
 sendRequest : Int -> (Result Http.Error a -> msg) -> Decoder a -> Cmd msg
 sendRequest id msg decoder =
-  GraphQl.query userRequest decoder
+  GraphQl.query userRequest
     |> GraphQl.addVariables [ ("id", Encode.int id) ]
-    |> GraphQl.send msg
-    |> GraphQl.Extra.send "/example_endpoint" decoder
+    |> GraphQl.Http.send "/example_endpoint" msg decoder
 ```
 
 # Field
@@ -96,25 +98,19 @@ sendRequest id msg decoder =
 @docs variable
 @docs input
 @docs nestedInput
-@docs queryArgs
 
 # Requests
 @docs Request
 @docs query
 @docs mutation
 @docs addVariables
-@docs send
 @docs toJson
-@docs toHttpRequest
-
 -}
 
 import Json.Encode as Encode
 import Json.Decode as Decode exposing (Decoder)
 import GraphQl.Field as Field
 import Helpers
-
-
 
 {-| Requests contains the query or the mutation and the variables of each GraphQL requests.
 The variables can't be used with an anonymous Request, due to the nature of GraphQL.
@@ -125,8 +121,8 @@ type Request a b
 {-| Entry of every GraphQL query to turn them into requests, which can be launched!
 
     object []
-      |> flip (query "https://example.com") decoder
-      |> send msg
+      |> query
+      |> Http.send "https://example.com" msg decoder
 -}
 query : Operation Query a -> Request Query a
 query query_ =
@@ -135,8 +131,8 @@ query query_ =
 {-| Entry of every GraphQL mutation to turn them into requests, which can be launched!
 
     object []
-      |> flip (mutation "https://example.com") decoder
-      |> send msg
+      |> mutation
+      |> Http.send "https://example.com" msg decoder
 -}
 mutation : Operation Mutation a -> Request Mutation a
 mutation query_ =
@@ -148,15 +144,13 @@ compiler will reject it.
 
     named [ field "user" |> withArgument "id" (variable "id") ]
       |> withVariables [ ("id", "INT") ]
-      |> flip (query "https://example.com") decoder
+      |> query
       |> addVariables [ ("id", Encode.int 12) ]
-      |> send msg
+      |> toJson
 -}
 addVariables : List (String, Encode.Value) -> Request a b -> Request a b
 addVariables variables (Request requestType operation _) =
   Request requestType operation (Just variables)
-
-
 
 type OperationType
   = OperationQuery
@@ -233,8 +227,7 @@ field id =
 
 {-| Adds variables to an Operation.
 
-    "UserRequest"
-      [ field "user" ]
+    "UserRequest" [ field "user" ]
       |> withVariables [ ("id", "id") ]
 
 Turns into:
@@ -460,7 +453,15 @@ addArgField : (String, Argument) -> String
 addArgField (param, Argument operation) =
     param ++ ": " ++ operation
 
-{-| Extract the JSON part of a `Request` to use it into your own requests. -}
+{-| Extract the JSON part of a `Request` to use it into your own requests.
+
+    sendUserRequest : Cmd msg
+    sendUserRequest =
+      myAwesomeRequest
+        |> toJson
+        |> Json.Encode.encode 0
+        |> WebSocket.send
+-}
 toJson : Request a b -> Encode.Value
 toJson (Request requestType operation variables) =
   operationToJson requestType operation variables
