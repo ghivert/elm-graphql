@@ -1,8 +1,5 @@
 # Elm GraphQL
 
-## Alternatives
-If you're searching a complete solution including Decoders implicitly defined with your query, take a look at [Elm GraphQL in Elm](https://github.com/jamesmacaulay/elm-graphql), and if you're searching for converting .graphql files to Elm, take a look at [GraphQL to Elm](https://github.com/jahewson/elm-graphql)!
-
 ## Opinion
 Just import GraphQL, and write queries and mutations! This package suppose your decoders are already written and do not write decoders, or that you want to keep control on the data received by GraphQL response. It only provides a nice syntax to do GraphQL queries and mutations, and decode the `"data"` at the root of standard GraphQL response for you as long as you use the HTTP wrapper. Just think on your schema, and don't bother with everything else. By not writing custom decoders, you can make multiple queries on the same data, with different schemas each times. They will always be converted to the same type, avoiding you to rewrote a type for each request like others can do. Moreover, it is purely written in Elm, avoiding you to think to recompile .graphql files.  
 [This post of Evan is typically explaining why you should write decoders by hand.](https://gist.github.com/evancz/1c5f2cf34939336ecb79b97bb89d9da6#gistcomment-2606737) This package tries to be the more agnostic possible: it's only a way to write a query in GraphQL, with a nice DSL. The idea is to allow everyone to use it with GraphQL and with whatever tool they need. If you think something specific should be added, it should remains in a `GraphQl.SpecificModule` file, like `GraphQl.Http`. Following the post of Evan, the idea in long term is to be able to generate and decode things on whatever format you want (like in [elm/bytes](https://github.com/elm/bytes) for example), and continuing to use GraphQL.
@@ -103,3 +100,6 @@ sendRequest id =
 
 ## Want to contribute?
 If you think this package is good, or if you want to bugfix something, or just globally improve the package, feel free to contribute. Make a PR, open an issue, and I will gladly work on it to make it part of `elm-graphql`!
+
+## Alternatives
+If you're searching a complete solution including Decoders implicitly defined with your query, take a look at [Elm GraphQL in Elm](https://github.com/jamesmacaulay/elm-graphql), and if you're searching for converting .graphql files to Elm, take a look at [GraphQL to Elm](https://github.com/jahewson/elm-graphql)!
