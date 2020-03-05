@@ -157,36 +157,28 @@ type OperationType
   | OperationMutation
 
 {-| -}
-type Query
-  = Query
+type Query = Query
 
 {-| -}
-type Mutation
-  = Mutation
+type Mutation = Mutation
 
 {-| -}
-type Anonymous
-  = Anonymous
+type Anonymous = Anonymous
 
 {-| -}
-type Named
-  = Named
+type Named = Named
 
 {-| -}
-type Variables
-  = Variables
+type Variables = Variables
 
 {-| Handle GraphQL values. -}
-type alias Field a
-  = Field.Field a
+type alias Field a = Field.Field a
 
 {-| Handle GraphQL operations -}
-type Operation a b
-  = Operation (Field.Field a)
+type Operation a b = Operation (Field.Field a)
 
 {-| Handle arguments on GraphQL fields. -}
-type Argument
-  = Argument String
+type Argument = Argument String
 
 {-| Generates a Field, from a list of fields.
 
@@ -200,8 +192,7 @@ Turns into:
     }
 -}
 object : List (Field a) -> Operation a Anonymous
-object =
-  Field.addSelectorsIn Field.new >> Operation
+object = Field.addSelectorsIn Field.new >> Operation
 
 {-| Generates a Field with a name.
 
@@ -217,13 +208,12 @@ Turns into:
 named : String -> List (Field a) -> Operation a Named
 named id =
   Field.addSelectorsIn Field.new
-    >> Field.setId id
-    >> Operation
+  >> Field.setId id
+  >> Operation
 
 {-| Generates a field. -}
 field : String -> Field a
-field id =
-  Field.setId id Field.new
+field id = Field.setId id Field.new
 
 {-| Adds variables to an Operation.
 
@@ -239,13 +229,12 @@ Turns into:
 withVariables : List (String, String) -> Operation a Named -> Operation a Variables
 withVariables values (Operation value) =
   values
-    |> List.map generateVariablePair
-    |> List.foldr Field.addInFieldVariables value
-    |> Operation
+  |> List.map generateVariablePair
+  |> List.foldr Field.addInFieldVariables value
+  |> Operation
 
 generateVariablePair : (String, String) -> (String, String)
-generateVariablePair (name, content) =
-  ("$" ++ name, content)
+generateVariablePair (name, content) = ("$" ++ name, content)
 
 {-| Adds selectors to a Field.
 
@@ -265,8 +254,7 @@ Turns into:
     }
 -}
 withSelectors : List (Field a) -> Field a -> Field a
-withSelectors selectors value =
-  Field.addSelectorsIn value selectors
+withSelectors selectors value = Field.addSelectorsIn value selectors
 
 {-| Adds an alias to a Field.
 
@@ -287,8 +275,7 @@ Turns into:
     }
 -}
 withAlias : String -> Field a -> Field a
-withAlias alias_ value =
-  Field.setAlias alias_ value
+withAlias alias_ value = Field.setAlias alias_ value
 
 {-| Adds an argument to a Field.
 
@@ -323,8 +310,7 @@ Turns into:
     user(id: $id)
 -}
 variable : String -> Argument
-variable name =
-  Argument ("$" ++ name)
+variable name = Argument ("$" ++ name)
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -336,8 +322,7 @@ Turns into:
     user(id: 12)
 -}
 int : Int -> Argument
-int =
-   String.fromInt >> Argument
+int = String.fromInt >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -349,8 +334,7 @@ Turns into:
     user(id: 12)
 -}
 float : Float -> Argument
-float =
-  String.fromFloat >> Argument
+float = String.fromFloat >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -365,10 +349,8 @@ bool : Bool -> Argument
 bool value =
   Argument <|
     case value of
-      True ->
-        "true"
-      False ->
-        "false"
+      True -> "true"
+      False -> "false"
 
 {-| Generates an argument, to use with `withArgument`.
 
@@ -380,8 +362,7 @@ Turns into:
     user(id: "12")
 -}
 string : String -> Argument
-string =
-  Helpers.betweenQuotes >> Argument
+string = Helpers.betweenQuotes >> Argument
 
 {-| Generates an argument, to use with `withArgument`.
 Generate a type in GraphQL.
@@ -394,8 +375,7 @@ Turns into:
     user(id: INT)
 -}
 type_ : String -> Argument
-type_ =
-  Argument
+type_ = Argument
 
 {-| Generates an argument, to use with 'withArgument'.
 
@@ -412,8 +392,7 @@ Turns into:
     CreateUser(user: {first: "John", last: "Doe"})
 -}
 input : List (String, Argument) -> Argument
-input =
-  argsToString >> Argument
+input = argsToString >> Argument
 
 {-| Generates an argument, to use with 'withArgument'.
 
@@ -439,19 +418,18 @@ Turns into:
 nestedInput : List (List (String, Argument)) -> Argument
 nestedInput =
   List.map argsToString
-    >> String.join ", "
-    >> Helpers.betweenBrackets
-    >> Argument
+  >> String.join ", "
+  >> Helpers.betweenBrackets
+  >> Argument
 
 argsToString : List (String, Argument) -> String
 argsToString =
   List.map addArgField
-    >> String.join ", "
-    >> Helpers.betweenBraces
+  >> String.join ", "
+  >> Helpers.betweenBraces
 
 addArgField : (String, Argument) -> String
-addArgField (param, Argument operation) =
-    param ++ ": " ++ operation
+addArgField (param, Argument operation) = param ++ ": " ++ operation
 
 {-| Extract the JSON part of a `Request` to use it into your own requests.
 
@@ -481,13 +459,11 @@ operationToJson requestType value variables =
 encodeOperation : OperationType -> Operation a b -> String
 encodeOperation requestType (Operation value) =
   value
-    |> Field.encodeField
-    |> (++) (operationToString requestType)
+  |> Field.encodeField
+  |> (++) (operationToString requestType)
 
 operationToString : OperationType -> String
 operationToString requestType =
   case requestType of
-    OperationMutation ->
-      "mutation "
-    OperationQuery ->
-      "query "
+    OperationMutation -> "mutation "
+    OperationQuery -> "query "
