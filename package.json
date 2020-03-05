@@ -1,0 +1,14 @@
+{
+  "name": "elm-graphql",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:ghivert/elm-graphql.git",
+  "author": "Guillaume Hivert <hivert.is.coming@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "test": "elm-test"
+  },
+  "devDependencies": {
+    "elm-test": "^0.19.1-revision2"
+  }
+}
