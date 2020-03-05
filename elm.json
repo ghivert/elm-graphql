@@ -3,7 +3,7 @@
     "name": "ghivert/elm-graphql",
     "summary": "GraphQL queries made easy in Elm!",
     "license": "MIT",
-    "version": "4.0.0",
+    "version": "5.0.0",
     "exposed-modules": [
         "GraphQl",
         "GraphQl.Http"
